@@ -1,22 +1,12 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-# In[2]:
-
-
 class CoordAttention(nn.Module):
     def __init__(self, inp, oup, reduction=32):
         super(CoordAttention, self).__init__()
-        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
-        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+        self.avg_pool_h = nn.AvgPool2d(kernel_size=(1, reduction), stride=(1, reduction))
+        self.avg_pool_w = nn.AvgPool2d(kernel_size=(reduction, 1), stride=(reduction, 1))
 
         mip = max(8, inp // reduction) 
 
@@ -28,12 +18,15 @@ class CoordAttention(nn.Module):
         
         self.conv_h = nn.Conv2d(mip, oup, kernel_size=1, stride=1, padding=0)
         self.conv_w = nn.Conv2d(mip, oup, kernel_size=1, stride=1, padding=0)
+        
     def forward(self, x):
         identity = x
         
         n, c, h, w = x.size()
-        x_h = self.pool_h(x)
-        x_w = self.pool_w(x).permute(0, 1, 3, 2)
+        
+        # Manually perform average pooling along the height and width dimensions
+        x_h = self.avg_pool_h(x)
+        x_w = self.avg_pool_w(x).permute(0, 1, 3, 2)
 
         y = torch.cat([x_h, x_w], dim=2) 
         y = self.conv1(y) 
@@ -52,4 +45,3 @@ class CoordAttention(nn.Module):
         out = identity * a_w * a_h
 
         return out
-
