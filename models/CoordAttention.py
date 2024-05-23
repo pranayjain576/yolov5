@@ -5,8 +5,8 @@ import torch.nn.functional as F
 class CoordAttention(nn.Module):
     def __init__(self, inp, oup, reduction=32):
         super(CoordAttention, self).__init__()
-        self.avg_pool_h = nn.AvgPool2d(kernel_size=(1, reduction), stride=(1, reduction))
-        self.avg_pool_w = nn.AvgPool2d(kernel_size=(reduction, 1), stride=(reduction, 1))
+        self.avg_pool_h = nn.AvgPool2d(kernel_size=(1, reduction), stride=(1, reduction), padding=(0, reduction // 2))
+        self.avg_pool_w = nn.AvgPool2d(kernel_size=(reduction, 1), stride=(reduction, 1), padding=(reduction // 2, 0))
 
         mip = max(8, inp // reduction) 
 
