@@ -14,7 +14,6 @@ class CoordAttention(nn.Module):
         self.bn1 = nn.BatchNorm2d(mip)
         self.relu = nn.ReLU(inplace=True)
         self.sigmoid = nn.Sigmoid()
-        self.swish = lambda x: x * self.sigmoid(x)
         
         self.conv_h = nn.Conv2d(mip, oup, kernel_size=1, stride=1, padding=0)
         self.conv_w = nn.Conv2d(mip, oup, kernel_size=1, stride=1, padding=0)
@@ -32,7 +31,7 @@ class CoordAttention(nn.Module):
         y = self.conv1(y) 
         y = self.bn1(y)  
         y = self.relu(y) 
-        y = self.swish(y)
+        y = y * self.sigmoid(y)
         
         x_h, x_w = torch.split(y, [h, w], dim=2)
         x_w = x_w.permute(0, 1, 3, 2) 
