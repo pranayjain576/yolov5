@@ -49,6 +49,7 @@ from models.common import (
     GhostConv,
     Proto,
 )
+from models.CoordAttention import CoordAttention
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
 from utils.general import LOGGER, check_version, check_yaml, colorstr, make_divisible, print_args
@@ -435,6 +436,9 @@ def parse_model(d, ch):
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
             c2 = ch[f] // args[0] ** 2
+        elif m is CoordAttention:  # Handle the CoordAttentoion module
+            c1, c2 = ch[f], args[0]
+            args = [c1, c2]
         else:
             c2 = ch[f]
 
@@ -449,6 +453,7 @@ def parse_model(d, ch):
             ch = []
         ch.append(c2)
     return nn.Sequential(*layers), sorted(save)
+
 
 
 if __name__ == "__main__":
