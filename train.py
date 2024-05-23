@@ -845,4 +845,5 @@ def run(**kwargs):
 
 if __name__ == "__main__":
     opt = parse_opt()
+    torch.use_deterministic_algorithms(warn_only=True)
     main(opt)
