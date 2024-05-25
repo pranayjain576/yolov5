@@ -300,30 +300,73 @@ class SPP(nn.Module):
             return self.cv2(torch.cat([x] + [m(x) for m in self.m], 1))
 
 
-class SPPF(nn.Module):
-    # Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher
-    def __init__(self, c1, c2, k=5):
-        """
-        Initializes YOLOv5 SPPF layer with given channels and kernel size for YOLOv5 model, combining convolution and
-        max pooling.
+import torch
+import torch.nn as nn
+import warnings
 
-        Equivalent to SPP(k=(5, 9, 13)).
+class SPPF(nn.Module):
+    def __init__(self, c1, c2, k=5, reduction=32):
         """
-        super().__init__()
+        Initializes YOLOv5 SPPF layer with Coordinate Attention mechanism.
+        """
+        super(SPPF, self).__init__()
+        self.in_channels = c1
+        self.reduction = reduction
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+
+        self.conv1 = nn.Conv2d(c1, c1 // reduction, kernel_size=1)
+        self.bn1 = nn.BatchNorm2d(c1 // reduction)
+        self.relu = nn.ReLU()
+
+        self.conv_h = nn.Conv2d(c1 // reduction, c1, kernel_size=1)
+        self.conv_w = nn.Conv2d(c1 // reduction, c1, kernel_size=1)
+        self.sigmoid = nn.Sigmoid()
+        
         c_ = c1 // 2  # hidden channels
         self.cv1 = Conv(c1, c_, 1, 1)
         self.cv2 = Conv(c_ * 4, c2, 1, 1)
         self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
 
     def forward(self, x):
-        """Processes input through a series of convolutions and max pooling operations for feature extraction."""
+        """Processes input through Coordinate Attention mechanism followed by SPPF operations."""
+        identity = x
+        batch_size, channels, height, width = x.size()
+
+        # Coordinate Attention: Horizontal and Vertical Pooling
+        x_h = self.pool_h(x) # (B, C, W, 1)
+        x_w = self.pool_w(x).permute(0, 1, 3, 2)   # (B, C, 1, H)
+        
+        # Concatenate
+        y = torch.cat([x_h, x_w], dim=2)  # (B, C, W+1, H)
+
+        # Convolution + BatchNorm + ReLU
+        y = self.relu(self.bn1(self.conv1(y)))  # (B, C//r, W+1, H)
+
+        # Split
+        # print(x_h.shape,x_w.shape,y.shape,x.shape)
+        x_h, x_w = y.split([width, height], dim=2)
+        
+        # Transformations
+        x_h = x_h.permute(0, 1, 3, 2)  # (B, C//r, 1, W)
+        x_w = x_w  # (B, C//r, 1, H)
+
+        # Generate attention maps
+        a_h = self.sigmoid(self.conv_h(x_h))  # (B, C, 1, W)
+        a_w = self.sigmoid(self.conv_w(x_w))  # (B, C, H, 1)
+
+        # Apply attention maps
+        x = identity * a_w * a_h  # (B, C, H, W)
+
+        # SPPF operations
         x = self.cv1(x)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # suppress torch 1.9.0 max_pool2d() warning
             y1 = self.m(x)
             y2 = self.m(y1)
-            return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
+            out = self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
 
+        return out
 
 class Focus(nn.Module):
     # Focus wh information into c-space
